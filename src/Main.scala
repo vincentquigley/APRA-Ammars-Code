@@ -14,9 +14,8 @@ object Main extends App{
   var failMatches = 0
   var imperfectMatches = 0
   var perfectMatches = 0
-
-  val inputFilePath = "/Users/Vincent/IdeaProjects/SimpleTest/src/spotify_titles.tsv"
-  val outputFilePath = "/Users/Vincent/IdeaProjects/SimpleTest/src/stats.txt"
+  val inputFilePath = "/Users/Vincent/IdeaProjects/APRA-Ammars-Code/src/spotify_titles.tsv"
+  val outputFilePath = "/Users/Vincent/IdeaProjects/APRA-Ammars-Code/src/debug-output.txt"
   val pw = new PrintWriter(outputFilePath)
 
   val linesIterator = io.Source.fromFile(inputFilePath).getLines
@@ -40,8 +39,8 @@ object Main extends App{
       noRef += 1
     else {
       val x = TitleCompare(inputTitle, refDataTitle)
-      //if (x < 1) pw.write(s" ${inputTitle} <=> ${refDataTitle}  JW -> $x \n")
-      pw.write(s" ${inputTitle} <=> ${refDataTitle}\n  JW -> $x \n")
+      if (x < 0.93) pw.write(s" ${inputTitle} <=> ${refDataTitle}  JW -> $x \n")
+      //pw.write(s" ${inputTitle} <=> ${refDataTitle}\n  JW -> $x \n")
       if (x == 0) zeroScores += 1
       else
       if (x < 0.93) failMatches += 1

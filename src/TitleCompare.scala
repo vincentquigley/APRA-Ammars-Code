@@ -48,13 +48,15 @@ object TitleCompare {
     val live: Option[Double] = zipped.flatMap { case (s1, s2) => checkLive(s1, s2) }.headOption
 
     fuzzyScore = max(fuzzyScore, live.getOrElse(WorstScore))
-    /*
     if (isAcceptableScore(fuzzyScore))
       fuzzyScore
-    else
-     */
-      max(fuzzyScore, zipped.map { case (s1, s2) => collapsedCompare(s1, s2) }.headOption.getOrElse(WorstScore))
-      //max(fuzzyScore, yipped.map { case (s1, s2) => collapsedCompare(s1, s2) }.headOption.getOrElse(WorstScore))
+    else {
+      val ccScore = inputSet.main.title.zip(refDataSet.main.title)
+        .map { case (s1, s2) => collapsedCompare(s1, s2) }
+        .headOption
+        .getOrElse(WorstScore)
+      max(fuzzyScore, ccScore)
+    }
   }
 
   // checks if title needs to be split into two titles to increase probability of matching
@@ -97,14 +99,15 @@ object TitleCompare {
       case (_, Some("(")) =>
         max(getFuzzyScore(inputSet.main, refDataSet.split1), getFuzzyScore(inputSet.main, refDataSet.split2))
       case (_, _) =>
-        getFuzzyScore(inputSet.main, refDataSet.main)
+        val x = getFuzzyScore(inputSet.main, refDataSet.main)
+        Main.pw.write(s"  ~fuzz~  JW ->  $x\n")
+        x
     }
 
   private def getFuzzyScore(m1: MatchTokens, m2: MatchTokens): Double = {
-  //  Main.pw.write(s"  ${m1.cleanTitle}  ~~ ${m2.cleanTitle}\n")
-
+   Main.pw.write(s"  ${m1.cleanTitle}  ~fuzz~  ${m2.cleanTitle}\n")
     m1.cleanTitle.zip(m2.cleanTitle).map {
-      case (ct1, ct2) if testNumerals(m1, m2) && m1.keySignature == m2.keySignature =>
+      case (ct1, ct2) if testNumeralsAndKeySignatures(m1, m2) =>
         fuzzyMatch(ct1, ct2)
       case _ => WorstScore
     }.headOption.getOrElse(WorstScore)
@@ -139,10 +142,22 @@ object TitleCompare {
     x
   }
 
+  private def testNumeralsAndKeySignatures(m1: MatchTokens, m2: MatchTokens): Boolean = {
+    if (m1.keySignature.isEmpty && m2.keySignature.isEmpty) {
+      val regexF = (m: MatchTokens) => m.cleanTitle.flatMap(t => """(.*)([\(| \(])(PART)([\) |\)])(.*)""".r.findFirstIn(t)).isDefined
+      Main.pw.write(s" NO key sig - testing numerals\n")
+      !(regexF(m1) || regexF(m2)) || (m1.numeral == m2.numeral)
+    }
+    else
+      Main.pw.write(s" testing key sig and numerals\n")
+      (m1.keySignature == m2.keySignature) && (m1.numeral == m2.numeral)
+  }
+/*
   private def testNumerals(m1: MatchTokens, m2: MatchTokens): Boolean = {
-    val regexF = (m: MatchTokens) => m.cleanTitle.flatMap(t => """(.*?)(\s?\()(PART)(\)\s?)""".r.findFirstIn(t)).isDefined
+    val regexF = (m: MatchTokens) => m.cleanTitle.flatMap(t => """(.*)([\(| \(])(PART)([\) |\)])(.*)""".r.findFirstIn(t)).isDefined
     !(regexF(m1) || regexF(m2)) || (m1.numeral == m2.numeral)
   }
+*/
 
   // generate all split titles strings (tokens) used to test against reference data tokens
   private def generateSplits(title: String): (MatchTokens, MatchTokens) = {
@@ -178,14 +193,20 @@ object TitleCompare {
   }.toOption
 
   private def getOtherTokens(title: String): (Option[String], Option[String], Option[String]) = {
-    val cleanF = deNoiseAndSwaps _ andThen cleanWords andThen insOPUS
-    val cleanedTitle = cleanF(title)
-    // generate a string composed of all digits in the title
-    val numStr = cleanedTitle.replaceAll("[^0-9]", "")
+    val cleanF = deNoiseAndSwaps _ andThen insOPUS
+    val cleanTitle = cleanF(title)
+    Main.pw.write(s"         title  $title\n   clean title  $cleanTitle\n")
     // if classical work then generate a key signature and remove signature from title
-    val (keyTitle, keySig) = getKeySignature(cleanedTitle)
+    val (keyTitle, keySig) = getKeySignature(cleanTitle)
+    val cleanerTitle = cleanWords(keyTitle.getOrElse(""))
+    Main.pw.write(s" cleaner title  $cleanerTitle\n")
+    // generate a string composed of all digits in the title
+    val numStr = cleanerTitle.replaceAll("[^0-9]", "")
+    Main.pw.write(s"  key =>  $keySig   numStr =>  $numStr\n")
+
+
     // remove anything to the right of left parenthesis
-    (keyTitle.flatMap(splitStripAndDeDouble), Option(numStr).filter(_.nonEmpty), keySig)
+    (Option(cleanerTitle).flatMap(splitStripAndDeDouble), Option(numStr).filter(_.nonEmpty), keySig)
   }
 
   private def deNoiseAndSwaps(title: String): String = {
@@ -234,8 +255,8 @@ object TitleCompare {
   }
 
   private def insOPUS(title: String): String =
-    """( OP )(NO|[0-9])""".r.findFirstIn(s" $title")
-      .map(_ => title.replaceFirst("""\s+OP\s+""", " OPUS "))
+    """( OP | OP)(NO|[0-9])""".r.findFirstIn(s" $title")
+      .map(_ => title.replaceFirst("""\s+OP\s?+""", " OPUS "))
       .getOrElse(title)
 
   private def getKeySignature(title: String): (Option[String], Option[String]) = {
@@ -245,7 +266,7 @@ object TitleCompare {
       .split(" ")
 
     // check for classical words in the title
-    if (!words.exists(ReplacementWords.ClassicalWordsList.contains)) return (Some(title), Some(""))
+    if (!words.exists(ReplacementWords.ClassicalWordsList.contains)) return (Some(title), None)
 
     val noteRegex = ".*(?: IN )([A-G])(.*)".r
     title match {
@@ -260,9 +281,10 @@ object TitleCompare {
           val tone = "( MINOR| MAJOR| MIN| MAJ)".r.findFirstIn(title).getOrElse("") // look for MINOR/MIN  or MAJOR/MAJ
           val key = if (tone.startsWith(" MA")) note + acc else note + acc + tone
           (Some(title.replace(s" IN $note$acc$tone", "")), Some(key))
-        }
-        else (Some(title), Some("X"))
-      case _ => (Some(title), Some(""))
+          }
+          else
+            (Some(title), None)
+      case _ => (Some(title), None)
     }
   }
 

@@ -10,7 +10,7 @@ object ReplacementWords {
     " I WILL " -> " ILL ", " YOU WILL " -> " YOULL ", " WE WILL " -> " WELL ", " HE WILL " -> " HELL ",
     " SHE WILL " -> " SHELL ", " THEY WILL " -> " THEYLL ", " HE IS " -> " HES ", " SHE IS " -> " SHES ",
     " DO NOT " -> " DONT ", " IS NOT " -> " ISNT ", " WILL NOT " -> " WONT ", " ARE NOT " -> " ARENT ",
-    "ING" -> "IN", """OP\.""" -> "OP ", "-" -> " ", ":" -> " ", "/" -> " ", "," -> " ", """\[""" -> "(", """\]""" -> ")")
+    "ING" -> "IN", """OP\.""" -> "OP  ", "-" -> " ", ":" -> " ", "/" -> " ", "," -> " ", """\[""" -> "(", """\]""" -> ")")
   // TODO: L' has been removed from this list because it doesn't exist as a word - has a separate check
   final val ArticlesList = List("A", "AN", "DAS", "DEM", "DEN", "DER", "DES", "EIN", "EINE", "EINEM", "EINEN", "EINES", "EL", "GLI",
     "IL", "LA", "LAS", "LE", "LES", "LO", "LOS", "THE", "UN", "UNA", "UNE", "UNO")
