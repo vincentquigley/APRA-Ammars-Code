@@ -1,4 +1,6 @@
 
+import Main.dw
+
 import scala.util.Try
 import math.max
 
@@ -27,23 +29,28 @@ object TitleCompare {
   // A Jaro-Winkler score is returned in the range 0 to 1, where 1 indicates an exact match and 0 a complete mismatch
   def compareTitles(inputSet: MatchSet, refDataTitle: String): Double = {
     // found a match with firstCompare so nothing more to do => return empty set for tokens
+
+
     inputSet.main.title.map(t => firstCompare(t, refDataTitle)) match {
-      case Some(doesMatch) if doesMatch => return PerfectScore
+      case Some(doesMatch) if doesMatch =>
+        Main.firstCompareCount += 1
+        Main.dw.write(" Matched at First Compare\n")
+        return PerfectScore
       case _ =>
     }
 
     val refDataSet = createTuples(refDataTitle)
     var fuzzyScore: Double = compareAllTitles(inputSet, refDataSet)
 
-    //if (isAcceptableScore(fuzzyScore)) return fuzzyScore
+    if (isAcceptableScore(fuzzyScore)) { Main.CompareAllCount += 1; return fuzzyScore }
 
     val zipped: Iterable[(String, String)] = inputSet.main.cleanTitle.zip(refDataSet.main.cleanTitle)
-    val yipped: Iterable[(String, String)] = inputSet.main.title.zip(refDataSet.main.title)
+    //val yipped: Iterable[(String, String)] = inputSet.main.title.zip(refDataSet.main.title)
 
     val feat: Option[Double] = zipped.flatMap { case (s1, s2) => checkFeat(s1, s2) }.headOption
 
     fuzzyScore = max(fuzzyScore, feat.getOrElse(WorstScore))
-    //if (isAcceptableScore(fuzzyScore)) return fuzzyScore
+    if (isAcceptableScore(fuzzyScore)) return fuzzyScore
 
     val live: Option[Double] = zipped.flatMap { case (s1, s2) => checkLive(s1, s2) }.headOption
 
@@ -55,6 +62,7 @@ object TitleCompare {
         .map { case (s1, s2) => collapsedCompare(s1, s2) }
         .headOption
         .getOrElse(WorstScore)
+      if (isAcceptableScore(ccScore)) Main.collapsedCompareCount += 1
       max(fuzzyScore, ccScore)
     }
   }
@@ -99,16 +107,22 @@ object TitleCompare {
       case (_, Some("(")) =>
         max(getFuzzyScore(inputSet.main, refDataSet.split1), getFuzzyScore(inputSet.main, refDataSet.split2))
       case (_, _) =>
-        val x = getFuzzyScore(inputSet.main, refDataSet.main)
-        Main.pw.write(s"  ~fuzz~  JW ->  $x\n")
-        x
+        if (inputSet.main.cleanTitle == refDataSet.main.cleanTitle)
+          {
+            Main.noFuzzyCount += 1
+            PerfectScore
+          }
+        else
+        getFuzzyScore(inputSet.main, refDataSet.main)
     }
 
   private def getFuzzyScore(m1: MatchTokens, m2: MatchTokens): Double = {
-   Main.pw.write(s"  ${m1.cleanTitle}  ~fuzz~  ${m2.cleanTitle}\n")
     m1.cleanTitle.zip(m2.cleanTitle).map {
       case (ct1, ct2) if testNumeralsAndKeySignatures(m1, m2) =>
-        fuzzyMatch(ct1, ct2)
+        val x = fuzzyMatch(ct1, ct2) //remove
+        Main.dw.write(s" $ct1  ~fuzz~  $ct2   (JW ->  $x)\n")   //remove
+        //fuzzyMatch(ct1, ct2)
+        x   //remove
       case _ => WorstScore
     }.headOption.getOrElse(WorstScore)
   }
@@ -138,19 +152,28 @@ object TitleCompare {
     }
 
     val x: Double = fuzzyMatch(checkStartParenthesis(title1), checkStartParenthesis(title2))
-    Main.pw.write(s" ${checkStartParenthesis(title1)}  -coll-  ${checkStartParenthesis(title2)}  JW ->  $x\n")
+    Main.dw.write(s" ${checkStartParenthesis(title1)}  -coll-  ${checkStartParenthesis(title2)}   (JW ->  $x)\n")
     x
   }
 
   private def testNumeralsAndKeySignatures(m1: MatchTokens, m2: MatchTokens): Boolean = {
     if (m1.keySignature.isEmpty && m2.keySignature.isEmpty) {
       val regexF = (m: MatchTokens) => m.cleanTitle.flatMap(t => """(.*)([\(| \(])(PART)([\) |\)])(.*)""".r.findFirstIn(t)).isDefined
-      Main.pw.write(s" NO key sig - testing numerals\n")
-      !(regexF(m1) || regexF(m2)) || (m1.numeral == m2.numeral)
+      val x = !(regexF(m1) || regexF(m2)) || (m1.numeral == m2.numeral)
+      val y = if (x) "same" else "diff"
+      if (regexF(m1) || regexF(m2)) Main.dw.write(s" found PART - testing numerals :  $y\n")
+      else Main.dw.write(s" no PART nor Classical\n")
+      x
     }
-    else
-      Main.pw.write(s" testing key sig and numerals\n")
-      (m1.keySignature == m2.keySignature) && (m1.numeral == m2.numeral)
+    else {
+      val x = (m1.keySignature == m2.keySignature) && (m1.numeral == m2.numeral)
+      val y = if (x) "same" else "diff"
+      Main.dw.write(s" Classical - testing key sig and numerals:  $y\n")
+      x
+    }
+   // val regexF = (m: MatchTokens) => m.cleanTitle.flatMap(t => """(.*)([\(| \(])(PART)([\) |\)])(.*)""".r.findFirstIn(t)).isDefined
+   // val z = (m1.numeral != m2.numeral) || !((m1.keySignature != m2.keySignature) || !(regexF(m1) || regexF(m2)))
+   // z
   }
 /*
   private def testNumerals(m1: MatchTokens, m2: MatchTokens): Boolean = {
@@ -195,18 +218,19 @@ object TitleCompare {
   private def getOtherTokens(title: String): (Option[String], Option[String], Option[String]) = {
     val cleanF = deNoiseAndSwaps _ andThen insOPUS
     val cleanTitle = cleanF(title)
-    Main.pw.write(s"         title  $title\n   clean title  $cleanTitle\n")
+    Main.dw.write(s"         title  $title\n   clean title  $cleanTitle\n")
     // if classical work then generate a key signature and remove signature from title
     val (keyTitle, keySig) = getKeySignature(cleanTitle)
+    val y = keySig.getOrElse("")  // remove
     val cleanerTitle = cleanWords(keyTitle.getOrElse(""))
-    Main.pw.write(s" cleaner title  $cleanerTitle\n")
+    Main.dw.write(s" cleaner title  $cleanerTitle\n")
     // generate a string composed of all digits in the title
     val numStr = cleanerTitle.replaceAll("[^0-9]", "")
-    Main.pw.write(s"  key =>  $keySig   numStr =>  $numStr\n")
-
-
     // remove anything to the right of left parenthesis
+    val Some(x) = Option(cleanerTitle).flatMap(splitStripAndDeDouble)
+    Main.dw.write(s" cleaned title  $x\n key =>  $y   numStr =>  $numStr\n")
     (Option(cleanerTitle).flatMap(splitStripAndDeDouble), Option(numStr).filter(_.nonEmpty), keySig)
+
   }
 
   private def deNoiseAndSwaps(title: String): String = {
@@ -283,8 +307,8 @@ object TitleCompare {
           (Some(title.replace(s" IN $note$acc$tone", "")), Some(key))
           }
           else
-            (Some(title), None)
-      case _ => (Some(title), None)
+            (Some(title), Some("no key"))
+      case _ => (Some(title), Some("no key"))  // found classical word but no key signature
     }
   }
 

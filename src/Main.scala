@@ -14,10 +14,14 @@ object Main extends App{
   var failMatches = 0
   var imperfectMatches = 0
   var perfectMatches = 0
+  var firstCompareCount = 0
+  var CompareAllCount = 0
+  var collapsedCompareCount = 0
+  var noFuzzyCount = 0
   val inputFilePath = "/Users/Vincent/IdeaProjects/APRA-Ammars-Code/src/spotify_titles.tsv"
   val debugFilePath = "/Users/Vincent/IdeaProjects/APRA-Ammars-Code/src/debug-output.txt"
   val statsFilePath = "/Users/Vincent/IdeaProjects/APRA-Ammars-Code/src/stats-output.txt"
-  val pw = new PrintWriter(debugFilePath)
+  val dw = new PrintWriter(debugFilePath)
   val sw = new PrintWriter(statsFilePath)
 
   val linesIterator = io.Source.fromFile(inputFilePath).getLines
@@ -35,28 +39,36 @@ object Main extends App{
       .trim.replaceAll(" +", " ")
     val inputTitle = t2
     val refDataTitle = e._2
-    pw.write("------------------------------------------------------------------------------------\n")
     total += 1
     if (refDataTitle.isEmpty)
       noRef += 1
     else {
+      dw.write("------------------------------------------------------------------------------------\n")
+      dw.write(s" ${inputTitle}  <-->  ${refDataTitle}\n")
+      dw.write("------------------------------------------------------------------------------------\n")
       val x = TitleCompare(inputTitle, refDataTitle)
-      if (x < 0.93) pw.write(s" ${inputTitle} <=> ${refDataTitle}  JW -> $x \n")
-      //pw.write(s" ${inputTitle} <=> ${refDataTitle}\n  JW -> $x \n")
       if (x == 0) zeroScores += 1
       else
-      if (x < 0.93) failMatches += 1
+      if (x < 0.93) { failMatches += 1; sw.write(s" ${inputTitle} <=> ${refDataTitle}\n$failMatches   (JW -> $x) \n") }
       else
       if (x < 1) imperfectMatches += 1 else perfectMatches += 1
+      //sw.write(s" ${inputTitle} <=> ${refDataTitle}\n   (JW -> $x) \n")
     }
   })
 
-  pw.write(s"\nTotal = $total\n" +
+  sw.write(s"\nTotal = $total\n" +
     s"No Reference Title = $noRef\n" +
     s"Zero Scores = $zeroScores\n" +
     s"Failed Match = $failMatches\n" +
     s"Match - Imperfect  $imperfectMatches\n" +
-    s"Match - Perfect = $perfectMatches")
-  pw.close()
+    s"Match - Perfect = $perfectMatches\n" +
+    s"Matched  = ${imperfectMatches + perfectMatches}\n" +
+    s"First Compares = $firstCompareCount\n" +
+    s"Compare Alls = $CompareAllCount\n" +
+    s"Collapsed Compares = $collapsedCompareCount\n" +
+    s"Total Compares = ${firstCompareCount + CompareAllCount + collapsedCompareCount}\n" +
+    s"** No Fuzzy Match = $noFuzzyCount"
+  )
+  sw.close()
 
 }
