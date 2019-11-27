@@ -15,8 +15,10 @@ object Main extends App{
   var imperfectMatches = 0
   var perfectMatches = 0
   val inputFilePath = "/Users/Vincent/IdeaProjects/APRA-Ammars-Code/src/spotify_titles.tsv"
-  val outputFilePath = "/Users/Vincent/IdeaProjects/APRA-Ammars-Code/src/debug-output.txt"
-  val pw = new PrintWriter(outputFilePath)
+  val debugFilePath = "/Users/Vincent/IdeaProjects/APRA-Ammars-Code/src/debug-output.txt"
+  val statsFilePath = "/Users/Vincent/IdeaProjects/APRA-Ammars-Code/src/stats-output.txt"
+  val pw = new PrintWriter(debugFilePath)
+  val sw = new PrintWriter(statsFilePath)
 
   val linesIterator = io.Source.fromFile(inputFilePath).getLines
   val regex = """(.*)\t(.*)""".r
@@ -33,7 +35,7 @@ object Main extends App{
       .trim.replaceAll(" +", " ")
     val inputTitle = t2
     val refDataTitle = e._2
-    pw.write("----------------------------\n")
+    pw.write("------------------------------------------------------------------------------------\n")
     total += 1
     if (refDataTitle.isEmpty)
       noRef += 1
