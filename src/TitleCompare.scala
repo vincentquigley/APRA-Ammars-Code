@@ -42,21 +42,24 @@ object TitleCompare {
     val refDataSet = createTuples(refDataTitle)
     var fuzzyScore: Double = compareAllTitles(inputSet, refDataSet)
 
-    if (isAcceptableScore(fuzzyScore)) { Main.CompareAllCount += 1; return fuzzyScore }
+    if (isAcceptableScore(fuzzyScore)) {
+      Main.compareAllCount += 1; return fuzzyScore
+    }
 
     val zipped: Iterable[(String, String)] = inputSet.main.cleanTitle.zip(refDataSet.main.cleanTitle)
-    //val yipped: Iterable[(String, String)] = inputSet.main.title.zip(refDataSet.main.title)
 
     val feat: Option[Double] = zipped.flatMap { case (s1, s2) => checkFeat(s1, s2) }.headOption
 
     fuzzyScore = max(fuzzyScore, feat.getOrElse(WorstScore))
-    if (isAcceptableScore(fuzzyScore)) return fuzzyScore
+    if (isAcceptableScore(fuzzyScore)) { Main.featCount += 1; return fuzzyScore }
 
     val live: Option[Double] = zipped.flatMap { case (s1, s2) => checkLive(s1, s2) }.headOption
 
     fuzzyScore = max(fuzzyScore, live.getOrElse(WorstScore))
-    if (isAcceptableScore(fuzzyScore))
+    if (isAcceptableScore(fuzzyScore)) {
+      Main.liveCount += 1
       fuzzyScore
+    }
     else {
       val ccScore = inputSet.main.title.zip(refDataSet.main.title)
         .map { case (s1, s2) => collapsedCompare(s1, s2) }
@@ -93,7 +96,8 @@ object TitleCompare {
     (inpTitle == refTitle) || testPartials(inpTitle, refTitle) || (stripAll(inpTitle) == stripAll(refTitle))
   }
 
-  private def compareAllTitles(inputSet: MatchSet, refDataSet: MatchSet): Double =
+  private def compareAllTitles(inputSet: MatchSet, refDataSet: MatchSet): Double = {
+    Main.compareAttempts += 1
     (inputSet.main.title.map(_.take(1)), refDataSet.main.title.map(_.take(1))) match {
       case (Some("("), Some("(")) =>
         Seq(
@@ -107,14 +111,10 @@ object TitleCompare {
       case (_, Some("(")) =>
         max(getFuzzyScore(inputSet.main, refDataSet.split1), getFuzzyScore(inputSet.main, refDataSet.split2))
       case (_, _) =>
-        if (inputSet.main.cleanTitle == refDataSet.main.cleanTitle)
-          {
-            Main.noFuzzyCount += 1
-            PerfectScore
-          }
-        else
+        Main.noSplitCount += 1
         getFuzzyScore(inputSet.main, refDataSet.main)
     }
+  }
 
   private def getFuzzyScore(m1: MatchTokens, m2: MatchTokens): Double = {
     m1.cleanTitle.zip(m2.cleanTitle).map {
@@ -227,7 +227,7 @@ object TitleCompare {
     // generate a string composed of all digits in the title
     val numStr = cleanerTitle.replaceAll("[^0-9]", "")
     // remove anything to the right of left parenthesis
-    val Some(x) = Option(cleanerTitle).flatMap(splitStripAndDeDouble)
+    val x = Option(cleanerTitle).flatMap(splitStripAndDeDouble).getOrElse("")
     Main.dw.write(s" cleaned title  $x\n key =>  $y   numStr =>  $numStr\n")
     (Option(cleanerTitle).flatMap(splitStripAndDeDouble), Option(numStr).filter(_.nonEmpty), keySig)
 

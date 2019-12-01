@@ -59,8 +59,9 @@ object CustomJaroWinkler {
         .sorted(Ordering.String.reverse)
       (seq(0), seq(1))
     }
+    Main.jwCalls += 1
 
-    if (minStr == maxStr) return Success(1.0)
+    if (minStr == maxStr) { Main.jwExact += 1; return Success(1.0) }
 
     require(minStr.length > 0, "input doesn't conform to regex [a-zA-Z0-9\\s]+")
 
@@ -110,7 +111,7 @@ object CustomJaroWinkler {
    */
   def apply(s1: String, s2: String): Double = doCompare(s1, s2) match {
     //case Failure(exception) => logger.warn(s"couldn't match '$s1' and '$s2': ${exception.getMessage}"); 0d
-    case Failure(exception) => println(s"couldn't match '$s1' and '$s2': ${exception.getMessage}"); 0d
+    case Failure(exception) => Main.jwEmptyTitles += 1; /*println(s"couldn't match '$s1' and '$s2': ${exception.getMessage}"); */0d
     case Success(value) => value
   }
 }

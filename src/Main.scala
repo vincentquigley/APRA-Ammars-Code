@@ -15,60 +15,117 @@ object Main extends App{
   var imperfectMatches = 0
   var perfectMatches = 0
   var firstCompareCount = 0
-  var CompareAllCount = 0
+  var compareAllCount = 0
+  var noSplitCount = 0
+  var compareAttempts = 0
   var collapsedCompareCount = 0
-  var noFuzzyCount = 0
-  val inputFilePath = "/Users/Vincent/IdeaProjects/APRA-Ammars-Code/src/spotify_titles.tsv"
-  val debugFilePath = "/Users/Vincent/IdeaProjects/APRA-Ammars-Code/src/debug-output.txt"
-  val statsFilePath = "/Users/Vincent/IdeaProjects/APRA-Ammars-Code/src/stats-output.txt"
+  var featCount = 0
+  var liveCount = 0
+  var jwEmptyTitles = 0
+  var skippedTitles = 0
+  var jwCalls = 0
+  var jwExact = 0
+  var introCount = 0
+  var lastWinfKey = ""
+  var matchFound = false
+  var inputTitle = ""
+  var winfKeyCount = 0
+  var inputTitleCount = 0
+  var lastInputTitle = ""
+  //val inputFilePath = "/Users/Vincent/IdeaProjects/APRA-TitleCompare-Debug/src/spotify_titles.tsv"
+  //  /home/k1/IdeaProjects/APRA-TitleCompare-Debug/src/spotify_titles.tsv
+  val inputFilePath = "sorted-spotify-titles-1m.tsv"
+  val debugFilePath = "debug-output.txt"
+  val statsFilePath = "stats-output.txt"
+ // val testFilePath = "test.txt"
   val dw = new PrintWriter(debugFilePath)
   val sw = new PrintWriter(statsFilePath)
-
+  //val tw = new PrintWriter(testFilePath)
+/*
   val linesIterator = io.Source.fromFile(inputFilePath).getLines
   val regex = """(.*)\t(.*)""".r
   val tupleIterator = linesIterator.flatMap(line => line match {
     case regex(inputTitle, refDataTitle) => Some((inputTitle, refDataTitle))
     case _ => None
   })
-
-  val L = tupleIterator.toList
-
-  L.foreach (e => {
-    val t1 = e._1.substring(0,min(e._1.length,60)).toUpperCase
-    val t2 = foreignSwaps.foldLeft(" " + t1) { case (t, (k, v)) => t.replaceAll(k, v) }
-      .trim.replaceAll(" +", " ")
-    val inputTitle = t2
-    val refDataTitle = e._2
-    total += 1
-    if (refDataTitle.isEmpty)
-      noRef += 1
-    else {
-      dw.write("------------------------------------------------------------------------------------\n")
-      dw.write(s" ${inputTitle}  <-->  ${refDataTitle}\n")
-      dw.write("------------------------------------------------------------------------------------\n")
-      val x = TitleCompare(inputTitle, refDataTitle)
-      if (x == 0) zeroScores += 1
-      else
-      if (x < 0.93) { failMatches += 1; sw.write(s" ${inputTitle} <=> ${refDataTitle}\n$failMatches   (JW -> $x) \n") }
-      else
-      if (x < 1) imperfectMatches += 1 else perfectMatches += 1
-      //sw.write(s" ${inputTitle} <=> ${refDataTitle}\n   (JW -> $x) \n")
-    }
+*/
+  val linesIterator = io.Source.fromFile(inputFilePath).getLines
+  val regex = """(.*)\t(.*)\t(.*)""".r
+  val tupleIterator = linesIterator.flatMap(line => line match {
+    case regex(inputTitle, refDataTitle, winfKey) => Some((inputTitle, refDataTitle, winfKey))
+    case _ =>
+      println(line)
+      None
   })
 
+  tupleIterator.foreach(e => {
+    total += 1
+    val (inputTitle, refDataTitle, winfKey) = e
+    if (lastInputTitle.toUpperCase != inputTitle.toUpperCase) {
+    //if (lastInputTitle != inputTitle) {
+      lastInputTitle = inputTitle
+      inputTitleCount += 1
+    //  tw.write(s"$inputTitleCount\t$inputTitle\t$lastInputTitle\n")
+    }
+    if (inputTitle.toUpperCase != "INTRO") {
+      if (lastWinfKey.isEmpty) lastWinfKey = winfKey //initialise lastWinfKey
+
+      if (!matchFound)
+          matchFound = !(processTitles(inputTitle, refDataTitle, winfKey) < 0.93)
+        else if (lastWinfKey != winfKey) {
+          lastWinfKey = winfKey
+          matchFound = !(processTitles(inputTitle, refDataTitle, winfKey) < 0.93)
+        } else
+          skippedTitles += 1
+      } else
+      introCount += 1
+  })
+
+  def processTitles(t1: String, t2: String, t3: String): Double = {
+    dw.write("------------------------------------------------------------------------------------\n")
+    dw.write(s" $t1  <-->  $t2\n")
+    dw.write("------------------------------------------------------------------------------------\n")
+    val x = TitleCompare(t1.substring(0,min(t1.length,60)).toUpperCase, t2)
+    if (x == 0)
+      zeroScores += 1
+    else
+    //if (x < 0.93) { failMatches += 1; sw.write(s" ${inputTitle} <=> ${refDataTitle}\n$failMatches   (JW -> $x) \n") }
+      if (x < 0.93)
+        failMatches += 1
+      else {
+        dw.write(s"                                                              WINF_key =  $t3\n")
+        if (x < 1) imperfectMatches += 1
+        else perfectMatches += 1
+        //sw.write(s" ${inputTitle} <=> ${refDataTitle}\n   (JW -> $x) \n")
+      }
+    x
+  }
+
+  val totalCompares = firstCompareCount+compareAllCount+collapsedCompareCount+featCount+liveCount
+  val attemptedMatch = total-skippedTitles-introCount
+  sw.write(s"\n$inputTitleCount\n")
   sw.write(s"\nTotal = $total\n" +
-    s"No Reference Title = $noRef\n" +
-    s"Zero Scores = $zeroScores\n" +
-    s"Failed Match = $failMatches\n" +
-    s"Match - Imperfect  $imperfectMatches\n" +
-    s"Match - Perfect = $perfectMatches\n" +
-    s"Matched  = ${imperfectMatches + perfectMatches}\n" +
-    s"First Compares = $firstCompareCount\n" +
-    s"Compare Alls = $CompareAllCount\n" +
-    s"Collapsed Compares = $collapsedCompareCount\n" +
-    s"Total Compares = ${firstCompareCount + CompareAllCount + collapsedCompareCount}\n" +
-    s"** No Fuzzy Match = $noFuzzyCount"
+    s"Skipped Intro = $introCount\n" +
+    s"Skipped Title = $skippedTitles\n" +
+    s"Attempted Match = $attemptedMatch\n" +
+    f"  ${noRef.toDouble/ attemptedMatch *100}%5.2f%%  No Reference Title = $noRef\n" +
+    f"  ${jwEmptyTitles.toDouble/ attemptedMatch *100}%5.2f%%  Blank Title -> JW = $jwEmptyTitles%d\n" +
+    f"  ${zeroScores.toDouble/ attemptedMatch *100}%5.2f%%  Zero Scores = $zeroScores%d\n" +
+    f"  ${failMatches.toDouble/ attemptedMatch *100}%5.2f%%  Failed Match = $failMatches%d\n" +
+    f"  ${imperfectMatches.toDouble/attemptedMatch*100}%5.2f%%  Match (Imperfect) = $imperfectMatches%d\n" +
+    f"  ${perfectMatches.toDouble/attemptedMatch*100}%5.2f%%  Match (Perfect) = $perfectMatches%d\n" +
+    f"  ${(perfectMatches+imperfectMatches).toDouble/attemptedMatch*100}%5.2f%%  Matched = ${imperfectMatches+perfectMatches}\n\n" +
+    s"Successful Comparisons :\n" +
+    f"  ${firstCompareCount.toDouble/totalCompares*100}%5.2f%%  FirstCompare = $firstCompareCount\n" +
+    f"  ${compareAllCount.toDouble/totalCompares*100}%5.2f%%  CompareAll = $compareAllCount\n" +
+    f"  ${collapsedCompareCount.toDouble/totalCompares*100}%5.2f%%  CollapsedCompare = $collapsedCompareCount\n" +
+    f"  ${featCount.toDouble/totalCompares*100}%5.2f%%  Feat = $featCount\n" +
+    f"  ${liveCount.toDouble/totalCompares*100}%5.2f%%  Live = $liveCount\n\n" +
+    s"JW Called = $jwCalls\n" +
+    f"- %% exact = ${jwExact.toDouble/jwCalls*100}%5.2f%%\n" +
+    f"Split %% = ${(1-noSplitCount.toDouble/compareAttempts)*100}%5.2f%%\n"
   )
   sw.close()
-
+  dw.close()
+  //tw.close()
 }
